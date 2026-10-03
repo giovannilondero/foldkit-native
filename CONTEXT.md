@@ -19,6 +19,14 @@ The ordered set of demos the Spike must pass: counter, controlled text input, lo
 The framework-agnostic retained node tree from ng-native that Foldkit Native renders into; it alone talks to React Native's Fabric.
 _Avoid_: bridge, native renderer (ambiguous with Foldkit's own renderer)
 
+**Platform**:
+The set of node operations, snabbdom modules and frame clock that Foldkit renders through; Foldkit's default is the browser Platform.
+_Avoid_: adapter, renderer, backend
+
+**Fabric Platform**:
+Foldkit Native's Platform: maps tags to Native Elements, supplies native modules, and commits the Fabric Engine once per frame.
+_Avoid_: adapter, native renderer
+
 **Native Element**:
 A host element a Foldkit Native view is built from (a view, a text, a pressable, a scroll view), as opposed to an HTML element.
 _Avoid_: component, tag
