@@ -132,5 +132,5 @@ Out of scope for Foldkit Native altogether: porting `@foldkit/ui`, third-party R
 ## Known risks
 
 - **ng-native churn:** alpha, seven releases in five days. Mitigation: the exact pin and the thin DOMAPI layer.
-- **Node vs. Hermes:** the seam was validated in Node, not on Hermes. Step 0 covers this.
+- **Node vs. Hermes:** the seam was validated in Node, not on Hermes. Step S3 covers this.
 - **Metro and the pnpm workspace:** symlinks and a duplicated `foldkit` would trip the html runtime singleton's double-load guard. The fallback is the `pnpm pack` tarball.
