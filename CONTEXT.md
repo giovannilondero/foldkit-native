@@ -13,7 +13,7 @@ The experiment this project is planning: a single proof that a Foldkit app can d
 _Avoid_: PoC, MVP, prototype (a prototype is a throwaway artifact answering one design question)
 
 **Demo Ladder**:
-The ordered set of demos the Spike must pass: counter, controlled text input, long list, HTTP Command, Subscription; navigation as stretch.
+The ordered set of demos the Spike must pass: counter, controlled text input, long list, HTTP Command, Subscription; styling via classes and navigation as bonuses.
 
 **Fabric Engine**:
 The framework-agnostic retained node tree from ng-native that Foldkit Native renders into; it alone talks to React Native's Fabric.
