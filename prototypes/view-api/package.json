@@ -1,0 +1,17 @@
+{
+  "name": "prototype-native-view-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
