@@ -9,6 +9,9 @@ dist/
 expo-env.d.ts
 .metro-health-check*
 
+# Tailwind sheet written by apps/spike/metro.config.js (rung 6)
+apps/spike/.tailwind/
+
 # generated native folders (CNG: `expo prebuild` recreates them)
 apps/spike/ios/
 apps/spike/android/
