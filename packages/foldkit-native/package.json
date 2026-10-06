@@ -14,7 +14,18 @@
     "@ng-native/fabric": "0.3.0"
   },
   "devDependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "effect": "4.0.0",
+    "foldkit": "workspace:*",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
     "typescript": "~6.0.3",
     "vitest": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "effect": "4.0.0",
+    "foldkit": "workspace:*",
+    "react-native": "0.86.3"
   }
 }

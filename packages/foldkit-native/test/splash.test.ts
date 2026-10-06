@@ -1,7 +1,7 @@
 import { Engine } from '@ng-native/fabric'
 import { describe, expect, it } from 'vitest'
 
-import { mountSplash } from '../src/index.ts'
+import { mountSplash } from '../src/splash.ts'
 import { createFakeFabric } from './fakeFabric.ts'
 
 describe('mountSplash', () => {
