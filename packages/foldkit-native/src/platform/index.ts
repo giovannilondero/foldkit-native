@@ -10,6 +10,7 @@ import {
   makeStyleModule,
 } from './modules.ts'
 import { makePressModule } from './press.ts'
+import { makeTextInputModule } from './textInput.ts'
 
 export type FabricPlatformOptions = Readonly<{
   /** Defaults to the global `requestAnimationFrame`. Tests pass their own. */
@@ -36,6 +37,22 @@ export const makeFabricPlatform = (
 
   let isInFrame = false
   let isCommitScheduled = false
+  // NOTE: work a module needs done once its patch has reached Fabric, such
+  // as a view command for a node that the commit just updated.
+  const afterCommit: Array<() => void> = []
+
+  // NOTE: an after-commit callback may dirty the Engine and commit on its
+  // own (`engine.remeasure`); that must not schedule another commit.
+  const commit = (): void => {
+    const wasInFrame = isInFrame
+    isInFrame = true
+    try {
+      engine.commit()
+      afterCommit.splice(0).forEach(callback => callback())
+    } finally {
+      isInFrame = wasInFrame
+    }
+  }
 
   engine.setOnDirty(() => {
     if (isInFrame || isCommitScheduled) {
@@ -44,7 +61,7 @@ export const makeFabricPlatform = (
     isCommitScheduled = true
     requestAnimationFrame(() => {
       isCommitScheduled = false
-      engine.commit()
+      commit()
     })
   })
 
@@ -56,6 +73,12 @@ export const makeFabricPlatform = (
       makeStyleModule(engine),
       makeEventsModule(engine),
       makePressModule(engine),
+      makeTextInputModule(engine, {
+        afterCommit: callback => {
+          afterCommit.push(callback)
+        },
+        requestAnimationFrame,
+      }),
       onUnmountModule,
       makeDestroyModule(engine),
     ],
@@ -66,7 +89,7 @@ export const makeFabricPlatform = (
           callback()
         } finally {
           isInFrame = false
-          engine.commit()
+          commit()
         }
       })
     },

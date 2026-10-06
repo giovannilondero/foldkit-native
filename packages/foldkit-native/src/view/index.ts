@@ -3,6 +3,7 @@ import { requireDispatch, type VNode } from 'foldkit/runtime'
 import type { TextStyle } from 'react-native'
 
 import type { PressData } from '../platform/press.ts'
+import type { TextInputData } from '../platform/textInput.ts'
 
 /** What a native view returns: a vnode, or nothing. */
 export type Html = VNode | null
@@ -28,6 +29,7 @@ type MutableData = {
   props: Record<string, unknown>
   on: Record<string, (event: unknown) => void>
   press?: PressData
+  textInput?: TextInputData
   contentContainerStyle?: Record<string, unknown>
 }
 
@@ -163,12 +165,17 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
     return { ...scroll, children: [content] }
   },
 
-  /** Minimal: rung 2 designs the controlled protocol (`mostRecentEventCount`,
-   *  `setTextAndSelection`). Today `Value` writes native `text` as is. */
-  textInput: (attributes: ReadonlyArray<TextInputAttribute<Message>>): VNode =>
-    element('text-input', attributes, [], toParent, {
+  /** A controlled field: `Value` is the Model's text, `OnChangeText` gets
+   *  what native shows after each edit. The text input module keeps the two
+   *  in step with RN's event-count protocol (`platform/textInput.ts`). */
+  textInput: (attributes: ReadonlyArray<TextInputAttribute<Message>>): VNode => {
+    const vnode = element('text-input', attributes, [], toParent, {
       underlineColorAndroid: 'transparent',
-    }),
+    })
+    const data = vnode.data as MutableData
+    data.textInput ??= { value: undefined, onChangeText: undefined }
+    return vnode
+  },
 
   // ATTRIBUTES
 
@@ -215,15 +222,18 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
     attribute('ContentContainerStyle', data => {
       data.contentContainerStyle = value as Record<string, unknown>
     }),
-  Value: (value: string): Attribute<'Value'> => prop('Value', 'text', value),
+  Value: (value: string): Attribute<'Value'> =>
+    attribute('Value', data => {
+      data.textInput = { onChangeText: data.textInput?.onChangeText, value }
+    }),
   Placeholder: (value: string): Attribute<'Placeholder'> =>
     prop('Placeholder', 'placeholder', value),
   OnChangeText: (toMessage: (text: string) => Message): Attribute<'OnChangeText', Message> =>
     attribute('OnChangeText', (data, dispatch) => {
       const send = dispatch()
-      data.on['change'] = event => {
-        const text = (event as { nativeEvent?: { text?: string } }).nativeEvent?.text
-        send(toMessage(text ?? ''))
+      data.textInput = {
+        value: data.textInput?.value,
+        onChangeText: text => send(toMessage(text)),
       }
     }),
 
