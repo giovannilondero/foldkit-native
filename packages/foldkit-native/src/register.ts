@@ -34,11 +34,12 @@ const currentConditions = (): Conditions => {
  * through the Fabric Engine with no React in the render path. Call it once
  * from the app's entry file, after `import 'expo'`.
  *
- * Fabric never tells a runnable its surface went away
- * (`unmountApplicationComponentAtRootTag` is a no-op there), so the previous
- * app is disposed when the runnable starts again on a new surface. A Fast
- * Refresh edit outside React components is a full reload, which ends the JS
- * runtime itself.
+ * On the New Architecture native stops a surface (a reload, a Fast Refresh
+ * that falls back to a full reload, the host tearing down) by calling the
+ * global `RN$stopSurface`, which React's renderer installs. With no React it
+ * is missing and native logs "stopSurface failed. Global was not installed",
+ * so this installs it and disposes the app on that surface. The previous app
+ * is also disposed if the runnable starts again on a new surface.
  */
 export const registerApp = <Resources = never>(
   makeProgram: (host: NativeHost) => NativeProgram<Resources>,
@@ -46,17 +47,33 @@ export const registerApp = <Resources = never>(
 ): void => {
   registerPlatformComponents(Platform.OS)
 
-  let current: MountedApp | undefined
+  let current: Readonly<{ surfaceId: number; app: MountedApp }> | undefined
+
+  const dispose = (): void => {
+    const stopping = current
+    current = undefined
+    stopping?.app.dispose()
+  }
+
+  const host = globalThis as { RN$stopSurface?: (surfaceId: number) => void }
+  const previousStopSurface = host.RN$stopSurface
+  host.RN$stopSurface = surfaceId => {
+    if (current?.surfaceId === surfaceId) {
+      dispose()
+    }
+    previousStopSurface?.(surfaceId)
+  }
 
   AppRegistry.registerRunnable(appKey, ({ rootTag }: { rootTag: number | string }) => {
-    current?.dispose()
-    const engine = new Engine(getFabricUIManager(), Number(rootTag), {
+    dispose()
+    const surfaceId = Number(rootTag)
+    const engine = new Engine(getFabricUIManager(), surfaceId, {
       processColor: value => processColor(value),
       resolveAssetSource: value =>
         Image.resolveAssetSource(value as Parameters<typeof Image.resolveAssetSource>[0]),
       conditions: currentConditions(),
       tokens: { '--hairline': { length: StyleSheet.hairlineWidth } },
     })
-    current = mount(engine, makeProgram)
+    current = { surfaceId, app: mount(engine, makeProgram) }
   })
 }
