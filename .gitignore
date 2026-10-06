@@ -1,1 +1,20 @@
 .claude/worktrees/
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+expo-env.d.ts
+.metro-health-check*
+
+# generated native folders (CNG: `expo prebuild` recreates them)
+apps/spike/ios/
+apps/spike/android/
+.kotlin/
+
+# typescript
+*.tsbuildinfo
+
+.DS_Store

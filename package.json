@@ -1,0 +1,13 @@
+{
+  "name": "foldkit-native-monorepo",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "build:foldkit": "pnpm -F foldkit build",
+    "build": "pnpm build:foldkit && pnpm -F foldkit-native build",
+    "test": "pnpm -F foldkit-native test"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  }
+}
