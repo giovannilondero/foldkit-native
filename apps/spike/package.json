@@ -1,0 +1,36 @@
+{
+  "name": "spike",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/main.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "prebuild": "expo prebuild --clean",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "@ng-native/fabric": "0.3.0",
+    "effect": "4.0.0",
+    "expo": "~57.0.26",
+    "expo-dev-client": "~57.0.19",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
+    "foldkit": "workspace:*",
+    "foldkit-native": "workspace:*",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@ng-native/tailwind": "0.3.0",
+    "@tailwindcss/cli": "^4.3.3",
+    "@types/react": "~19.2.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0"
+  }
+}

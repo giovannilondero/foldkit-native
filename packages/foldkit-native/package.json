@@ -1,0 +1,37 @@
+{
+  "name": "foldkit-native",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./view": "./src/view/index.ts",
+    "./mount": "./src/mount.ts",
+    "./subscription": "./src/subscription/index.ts",
+    "./css": "./src/css/index.ts",
+    "./testing": "./test/testing.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ng-native/fabric": "0.3.0"
+  },
+  "devDependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "@ng-native/metro": "0.3.0",
+    "effect": "4.0.0",
+    "foldkit": "workspace:*",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "effect": "4.0.0",
+    "foldkit": "workspace:*",
+    "react-native": "0.86.3"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Foldkit Spike",
+    "slug": "foldkit-spike",
+    "version": "1.0.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "foldkitspike",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.foldkit.spike"
+    },
+    "android": {
+      "package": "dev.foldkit.spike",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    }
+  }
+}
