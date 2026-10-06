@@ -8,6 +8,10 @@ The Expo SDK 57 **dev client** (New Architecture and Hermes, both unconditional 
 
 `src/app.ts` is the shell: a menu, a back pressable, and generic routing of each demo's Messages, Commands and Subscriptions. Each demo lives in `src/demos/<name>.ts` and exports `Model` and `demo = defineDemo({ title, init, update, view, subscriptions? })` (`src/demo.ts`). To add one, write that file, then add one line to `Screen` and one to `demos` in `src/demos.ts`. `pnpm -F spike test` drives the app on the fake Fabric.
 
+## Tailwind (rung 6)
+
+`metro.config.js` wraps Expo's config in `withTailwind` (`@ng-native/tailwind`): loading it compiles `src/styles.css`, with every class string Tailwind finds in `src/`, into `.tailwind/app.tailwind.js` (gitignored), and a dev server keeps `tailwindcss --watch` running. `src/main.ts` passes that sheet to `registerApp(makeSpike, { styleSheet })`, so `n.Class('…')` works on any element, with the `ios:`/`android:`, `dark:` and `active:` variants. `node metro.config.js` writes the sheet once (needed before `pnpm -F spike typecheck`; `pnpm -F spike test` does it itself). Class strings must be whole literals: one built at runtime is not found by the scan.
+
 ## Setup (from the repo root)
 
 Tested with Node 26 and pnpm 12.3.

@@ -1,0 +1,9 @@
+/* The Tailwind entry (rung 6), compiled by `withTailwind` in metro.config.js.
+   No preflight: it is browser-only. `source('.')` scans `src/` only. */
+@import 'tailwindcss/theme.css';
+@import 'tailwindcss/utilities.css' source('.');
+@import '@ng-native/tailwind/native.css';
+
+/* The scan reads every word: "a fixed inset" in a comment would emit `.fixed`,
+   which native drops with a build warning. */
+@source not inline('fixed');

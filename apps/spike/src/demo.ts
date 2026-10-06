@@ -1,10 +1,11 @@
+import type { HttpClient } from 'effect/http'
 import type { Subscriptions } from 'foldkit/subscription'
 import type { Return } from 'foldkit/update'
 import type { Html, NativeBuilder } from 'foldkit-native/view'
 
 /** Services a demo's Commands and Subscriptions may need. The app's
  *  `resources` Layer (in `app.ts`) must provide every one listed here. */
-export type DemoServices = never
+export type DemoServices = HttpClient.HttpClient
 
 /**
  * One screen of the Spike app, a self-contained Foldkit program the menu

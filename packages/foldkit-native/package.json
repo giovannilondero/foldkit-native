@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./view": "./src/view/index.ts",
     "./mount": "./src/mount.ts",
+    "./subscription": "./src/subscription/index.ts",
+    "./css": "./src/css/index.ts",
     "./testing": "./test/testing.ts"
   },
   "scripts": {
@@ -18,6 +20,7 @@
   },
   "devDependencies": {
     "@effect/platform-browser": "4.0.0",
+    "@ng-native/metro": "0.3.0",
     "effect": "4.0.0",
     "foldkit": "workspace:*",
     "react": "19.2.3",

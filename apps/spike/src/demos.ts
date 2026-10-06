@@ -1,7 +1,11 @@
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import type { Demo } from './demo'
+import * as AppState from './demos/appState'
 import * as Counter from './demos/counter'
+import * as Http from './demos/http'
+import * as LongList from './demos/longList'
+import * as TailwindCounter from './demos/tailwindCounter'
 import * as TextInput from './demos/textInput'
 
 // Adding a demo: write `demos/<name>.ts` exporting `Model` and `demo`, then
@@ -12,6 +16,10 @@ export const Screen = defineTaggedUnion({
   Menu: {},
   Counter: { model: Counter.Model },
   TextInput: { model: TextInput.Model },
+  Http: { model: Http.Model },
+  LongList: { model: LongList.Model },
+  AppState: { model: AppState.Model },
+  TailwindCounter: { model: TailwindCounter.Model },
 })
 export type Screen = typeof Screen.Type
 
@@ -19,6 +27,10 @@ export type Screen = typeof Screen.Type
 export const demos = {
   Counter: Counter.demo,
   TextInput: TextInput.demo,
+  Http: Http.demo,
+  LongList: LongList.demo,
+  AppState: AppState.demo,
+  TailwindCounter: TailwindCounter.demo,
 } satisfies DemoRegistry
 
 export type DemoTag = keyof typeof demos
