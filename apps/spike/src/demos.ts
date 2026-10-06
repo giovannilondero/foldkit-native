@@ -2,6 +2,7 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import type { Demo } from './demo'
 import * as Counter from './demos/counter'
+import * as LongList from './demos/longList'
 
 // Adding a demo: write `demos/<name>.ts` exporting `Model` and `demo`, then
 // add one line to `Screen` and one to `demos` below. Nothing else changes.
@@ -10,12 +11,14 @@ import * as Counter from './demos/counter'
 export const Screen = defineTaggedUnion({
   Menu: {},
   Counter: { model: Counter.Model },
+  LongList: { model: LongList.Model },
 })
 export type Screen = typeof Screen.Type
 
 /** The menu, in order. Keys are the `Screen` tags. */
 export const demos = {
   Counter: Counter.demo,
+  LongList: LongList.demo,
 } satisfies DemoRegistry
 
 export type DemoTag = keyof typeof demos
