@@ -22,53 +22,61 @@ declare const MessageType: unique symbol
 
 type Dispatch = (message: unknown) => void
 
-type MutableData = {
+/** The vnode data an element's attributes write into, before it becomes the
+ *  vnode's `data`. */
+type VNodeDataDraft = {
   key?: string | number
   class?: Record<string, boolean>
   style?: Record<string, unknown>
   props: Record<string, unknown>
   on: Record<string, (event: unknown) => void>
+  /** Set by `OnPress`; with `isPressDisabled`, becomes `press`. */
+  onPress?: () => void
+  /** Set by `Disabled`. */
+  isPressDisabled?: boolean
   press?: PressData
   textInput?: TextInputData
-  contentContainerStyle?: Record<string, unknown>
 }
 
 /**
- * One attribute of a native element. `Tag` decides which elements accept it;
- * `Message` is phantom, so an attribute that dispatches nothing (`Style`) is
- * an `Attribute<'Style', never>` and fits any builder.
+ * One attribute of a Native Element. `Name` decides which Native Elements
+ * accept it; `Message` is phantom, so an attribute that dispatches nothing
+ * (`Style`) is an `Attribute<'Style', never>` and fits any builder.
  */
-export type Attribute<Tag extends string, Message = never> = Readonly<{
-  _tag: Tag
+export type Attribute<Name extends string, Message = never> = Readonly<{
+  _tag: Name
   /** Writes the attribute into the vnode data. `dispatch` is bound to the
    *  render frame that builds the element. */
-  apply: (data: MutableData, dispatch: () => Dispatch) => void
+  apply: (data: VNodeDataDraft, dispatch: () => Dispatch) => void
   readonly [MessageType]?: Message
 }>
 
-type CommonTag = 'Key' | 'Class' | 'Style' | 'TestID' | 'AccessibilityLabel'
+/** The attributes every Native Element accepts. */
+type CommonAttributeName = 'Key' | 'Class' | 'Style' | 'TestID' | 'AccessibilityLabel'
 
-export type ViewAttribute<Message> = Attribute<CommonTag, Message>
-export type TextAttribute<Message> = Attribute<CommonTag | 'NumberOfLines', Message>
+export type ViewAttribute<Message> = Attribute<CommonAttributeName, Message>
+export type TextAttribute<Message> = Attribute<CommonAttributeName, Message>
 export type PressableAttribute<Message> = Attribute<
-  CommonTag | 'OnPress' | 'Disabled' | 'AccessibilityRole',
+  CommonAttributeName | 'OnPress' | 'Disabled',
   Message
 >
-export type ScrollViewAttribute<Message> = Attribute<
-  CommonTag | 'ContentContainerStyle' | 'Horizontal',
-  Message
->
+export type ScrollViewAttribute<Message> = Attribute<CommonAttributeName, Message>
 export type TextInputAttribute<Message> = Attribute<
-  CommonTag | 'Value' | 'Placeholder' | 'OnChangeText' | 'AutoCorrect' | 'AutoCapitalize',
+  | CommonAttributeName
+  | 'Value'
+  | 'Placeholder'
+  | 'OnChangeText'
+  | 'AutoCorrect'
+  | 'AutoCapitalize',
   Message
 >
 
-const attribute = <Tag extends string, Message = never>(
-  _tag: Tag,
-  apply: Attribute<Tag, Message>['apply'],
-): Attribute<Tag, Message> => ({ _tag, apply })
+const attribute = <Name extends string, Message = never>(
+  _tag: Name,
+  apply: Attribute<Name, Message>['apply'],
+): Attribute<Name, Message> => ({ _tag, apply })
 
-const prop = <Tag extends string>(_tag: Tag, key: string, value: unknown): Attribute<Tag> =>
+const prop = <Name extends string>(_tag: Name, key: string, value: unknown): Attribute<Name> =>
   attribute(_tag, data => {
     data.props[key] = value
   })
@@ -91,26 +99,33 @@ const element = (
   toParent: (message: unknown) => unknown,
   defaults: Readonly<Record<string, unknown>> = {},
 ): VNode => {
-  const data: MutableData = { props: { ...defaults }, on: {} }
+  const draft: VNodeDataDraft = { props: { ...defaults }, on: {} }
   let dispatch: Dispatch | undefined
   // NOTE: read once, while the view runs inside its render frame; handlers
   // fire later, outside it, and close over the result.
-  const bound = (): Dispatch => {
+  const resolveDispatch = (): Dispatch => {
     if (dispatch === undefined) {
       const outer = requireDispatch()
       dispatch = message => outer(toParent(message))
     }
     return dispatch
   }
-  attributes.forEach(each => each.apply(data, bound))
+  attributes.forEach(each => each.apply(draft, resolveDispatch))
+  // NOTE: only an element with `OnPress` takes part in the press protocol. A
+  // `Disabled` alone must not make it a responder that swallows touches.
+  if (draft.onPress !== undefined) {
+    draft.press = { onPress: draft.onPress, isDisabled: draft.isPressDisabled ?? false }
+  }
+  delete draft.onPress
+  delete draft.isPressDisabled
   return {
     sel,
     // NOTE: snabbdom types `style` as CSS; on native it holds RN style values.
-    data: data as VNode['data'],
+    data: draft as VNode['data'],
     children: [...children],
     elm: undefined,
     text: undefined,
-    key: data.key,
+    key: draft.key,
   }
 }
 
@@ -146,24 +161,21 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
     }),
 
   /** `scroll-view > view[collapsable=false] > children`, as RN's ScrollView
-   *  draws it: the inner view is the content container. */
+   *  draws it: the inner view is the content container. Vertical only. */
   scrollView: (
     attributes: ReadonlyArray<ScrollViewAttribute<Message>>,
     children: ReadonlyArray<Html> = [],
-  ): VNode => {
-    const scroll = element('scroll-view', attributes, [], toParent)
-    const outer = scroll.data as MutableData
-    const content = element('view', [], children.filter(isPresent), toParent, {
-      collapsable: false,
-    })
-    const contentData = content.data as MutableData
-    contentData.style = {
-      ...(outer.props['horizontal'] === true && { flexDirection: 'row' }),
-      ...outer.contentContainerStyle,
-    }
-    delete outer.contentContainerStyle
-    return { ...scroll, children: [content] }
-  },
+  ): VNode =>
+    element(
+      'scroll-view',
+      attributes,
+      [
+        element('view', [], children.filter(isPresent), toParent, {
+          collapsable: false,
+        }),
+      ],
+      toParent,
+    ),
 
   /** A controlled field: `Value` is the Model's text, `OnChangeText` gets
    *  what native shows after each edit. The text input module keeps the two
@@ -172,7 +184,7 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
     const vnode = element('text-input', attributes, [], toParent, {
       underlineColorAndroid: 'transparent',
     })
-    const data = vnode.data as MutableData
+    const data = vnode.data as VNodeDataDraft
     data.textInput ??= { value: undefined, onChangeText: undefined }
     return vnode
   },
@@ -199,28 +211,15 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
   TestID: (value: string): Attribute<'TestID'> => prop('TestID', 'testID', value),
   AccessibilityLabel: (value: string): Attribute<'AccessibilityLabel'> =>
     prop('AccessibilityLabel', 'accessibilityLabel', value),
-  AccessibilityRole: (value: string): Attribute<'AccessibilityRole'> =>
-    prop('AccessibilityRole', 'accessibilityRole', value),
-  NumberOfLines: (value: number): Attribute<'NumberOfLines'> =>
-    prop('NumberOfLines', 'numberOfLines', value),
   OnPress: (message: Message): Attribute<'OnPress', Message> =>
     attribute('OnPress', (data, dispatch) => {
       const send = dispatch()
-      data.press = {
-        isDisabled: data.press?.isDisabled ?? false,
-        onPress: () => send(message),
-      }
+      data.onPress = () => send(message)
     }),
   Disabled: (isDisabled: boolean): Attribute<'Disabled'> =>
     attribute('Disabled', data => {
-      data.press = { onPress: data.press?.onPress ?? (() => {}), isDisabled }
+      data.isPressDisabled = isDisabled
       data.props['accessibilityState'] = { disabled: isDisabled }
-    }),
-  Horizontal: (isHorizontal: boolean): Attribute<'Horizontal'> =>
-    prop('Horizontal', 'horizontal', isHorizontal),
-  ContentContainerStyle: (value: Style): Attribute<'ContentContainerStyle'> =>
-    attribute('ContentContainerStyle', data => {
-      data.contentContainerStyle = value as Record<string, unknown>
     }),
   Value: (value: string): Attribute<'Value'> =>
     attribute('Value', data => {
@@ -246,12 +245,11 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
         onChangeText: text => send(toMessage(text)),
       }
     }),
-
 })
 
-/** The typed builder a native view draws with: RN-named elements (camelCase)
- *  and RN-named attributes (PascalCase), Foldkit's attribute-array plus
- *  children-array shape. */
+/** The typed builder a native view draws with: RN-named Native Elements
+ *  (camelCase) and RN-named attributes (PascalCase), Foldkit's
+ *  attribute-array plus children-array shape. */
 export type NativeBuilder<Message> = ReturnType<typeof makeElements<Message>> &
   Readonly<{
     /** A builder for a child view whose Messages the parent wraps, e.g.

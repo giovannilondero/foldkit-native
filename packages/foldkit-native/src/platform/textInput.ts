@@ -1,7 +1,7 @@
 import type { Engine, EngineNode } from '@ng-native/fabric'
-import type { Module, VNode } from 'foldkit/runtime'
+import type { Module } from 'foldkit/runtime'
 
-import { asEngineNode } from './domApi.ts'
+import { makeNodeStateHooks, type NodeState } from './nodeState.ts'
 
 /**
  * What `n.textInput` puts on its vnode under `data.textInput`: the Model's
@@ -16,15 +16,15 @@ export type TextInputData = Readonly<{
 /** `setTextAndSelection`'s selection arguments for "leave the cursor be". */
 const KEEP_SELECTION = -1
 
-type Field = {
-  input: TextInputData
+type Field = NodeState<TextInputData> & {
   /** What native showed last, by its own report or by our command. */
   lastNativeText: string | undefined
   /** The `eventCount` of the last `topChange`: native's edit counter. */
   eventCount: number
   /** The `mostRecentEventCount` prop as last written. */
   writtenEventCount: number | undefined
-  dispose: () => void
+  /** False once the node stops being a field (destroyed, or no `textInput`). */
+  isActive: boolean
 }
 
 export type TextInputModuleOptions = Readonly<{
@@ -62,8 +62,6 @@ export const makeTextInputModule = (
   engine: Engine,
   options: TextInputModuleOptions,
 ): Module => {
-  const fields = new WeakMap<EngineNode, Field>()
-
   /** Sends the Model's value to native if native shows something else. */
   const reconcile = (node: EngineNode, field: Field): void => {
     const desired = field.input.value
@@ -88,9 +86,10 @@ export const makeTextInputModule = (
       lastNativeText: input.value,
       eventCount: 0,
       writtenEventCount: undefined,
+      isActive: true,
       dispose: () => {},
     }
-    field.dispose = engine.setEventListener(node, 'topChange', event => {
+    const stopListening = engine.setEventListener(node, 'topChange', event => {
       const native = (event as { nativeEvent?: { text?: string; eventCount?: number } })
         .nativeEvent
       const text = native?.text ?? ''
@@ -98,52 +97,30 @@ export const makeTextInputModule = (
       field.eventCount = native?.eventCount ?? field.eventCount + 1
       field.input.onChangeText?.(text)
       options.requestAnimationFrame(() => {
-        if (fields.get(node) === field) {
+        if (field.isActive) {
           reconcile(node, field)
         }
       })
     })
+    field.dispose = () => {
+      field.isActive = false
+      stopListening()
+    }
     return field
   }
 
-  const updateField = (_oldVnode: VNode, vnode: VNode): void => {
-    if (vnode.elm === undefined) {
-      return
-    }
-    const node = asEngineNode(vnode.elm)
-    const input: TextInputData | undefined = vnode.data?.textInput
-    const existing = fields.get(node)
-    if (input === undefined) {
-      if (existing !== undefined) {
-        existing.dispose()
-        fields.delete(node)
+  return makeNodeStateHooks<TextInputData, Field>({
+    inputOf: vnode => vnode.data?.textInput,
+    start,
+    onPatch: (node, field, previousInput) => {
+      if (previousInput === undefined || previousInput.value !== field.input.value) {
+        engine.setProp(node, 'text', field.input.value ?? null)
       }
-      return
-    }
-    const field = existing ?? start(node, input)
-    fields.set(node, field)
-    const oldValue = existing === undefined ? undefined : field.input.value
-    field.input = input
-    if (existing === undefined || oldValue !== input.value) {
-      engine.setProp(node, 'text', input.value ?? null)
-    }
-    if (field.writtenEventCount !== field.eventCount) {
-      field.writtenEventCount = field.eventCount
-      engine.setProp(node, 'mostRecentEventCount', field.eventCount)
-    }
-    options.afterCommit(() => reconcile(node, field))
-  }
-
-  return {
-    create: updateField,
-    update: updateField,
-    destroy: vnode => {
-      if (vnode.elm === undefined) {
-        return
+      if (field.writtenEventCount !== field.eventCount) {
+        field.writtenEventCount = field.eventCount
+        engine.setProp(node, 'mostRecentEventCount', field.eventCount)
       }
-      const node = asEngineNode(vnode.elm)
-      fields.get(node)?.dispose()
-      fields.delete(node)
+      options.afterCommit(() => reconcile(node, field))
     },
-  }
+  })
 }

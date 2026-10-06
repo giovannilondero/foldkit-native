@@ -1,25 +1,24 @@
-import type { Engine, EngineNode } from '@ng-native/fabric'
+import type { Engine } from '@ng-native/fabric'
 import type { Module, VNode } from 'foldkit/runtime'
 
-import { asEngineNode } from './domApi.ts'
+import { engineNodeOf } from './domApi.ts'
+import { makeNodeStateHooks, type NodeState } from './nodeState.ts'
 
 // NOTE: no module sets `dataMask`. Foldkit's VNodeDataMask bits are internal,
 // and a module without a mask simply runs for every vnode, which is correct.
 // Revisit if patch cost shows up in a profile.
 
-type Bag = Readonly<Record<string, unknown>>
+/** A string-keyed record read off vnode data: props, a style, classes. */
+type Values = Readonly<Record<string, unknown>>
 
-const EMPTY: Bag = {}
-
-const elmOf = (vnode: VNode): EngineNode | undefined =>
-  vnode.elm === undefined ? undefined : asEngineNode(vnode.elm)
+const NO_VALUES: Values = {}
 
 /** The props a vnode asks for: snabbdom's `attrs` and `props` are one thing
  *  on native, so they are merged, `props` winning. */
-const propsOf = (vnode: VNode): Bag => {
+const propsOf = (vnode: VNode): Values => {
   const data = vnode.data
   if (data === undefined || (data.attrs === undefined && data.props === undefined)) {
-    return EMPTY
+    return NO_VALUES
   }
   return { ...data.attrs, ...data.props }
 }
@@ -27,7 +26,7 @@ const propsOf = (vnode: VNode): Bag => {
 /** attrs + props → `engine.setProp`, with removal as `setProp(node, key, null)`. */
 export const makePropsModule = (engine: Engine): Module => {
   const updateProps = (oldVnode: VNode, vnode: VNode): void => {
-    const node = elmOf(vnode)
+    const node = engineNodeOf(vnode)
     const oldProps = propsOf(oldVnode)
     const props = propsOf(vnode)
     if (node === undefined || oldProps === props) {
@@ -48,7 +47,7 @@ export const makePropsModule = (engine: Engine): Module => {
 }
 
 const classNameOf = (vnode: VNode): string =>
-  Object.entries(vnode.data?.class ?? EMPTY)
+  Object.entries(vnode.data?.class ?? NO_VALUES)
     .filter(([, isOn]) => isOn === true)
     .map(([name]) => name)
     .join(' ')
@@ -56,7 +55,7 @@ const classNameOf = (vnode: VNode): string =>
 /** class → `engine.setClasses`. Classes only feed the Engine's CSS cascade. */
 export const makeClassModule = (engine: Engine): Module => {
   const updateClasses = (oldVnode: VNode, vnode: VNode): void => {
-    const node = elmOf(vnode)
+    const node = engineNodeOf(vnode)
     const className = classNameOf(vnode)
     if (node !== undefined && className !== classNameOf(oldVnode)) {
       engine.setClasses(node, className)
@@ -69,7 +68,7 @@ export const makeClassModule = (engine: Engine): Module => {
 // removal; the Engine's own transitions replace them, so they are dropped.
 const SNABBDOM_STYLE_HOOKS = new Set(['delayed', 'remove', 'destroy'])
 
-const styleOf = (vnode: VNode): Bag | undefined => {
+const styleOf = (vnode: VNode): Values | undefined => {
   const style = vnode.data?.style
   if (style === undefined) {
     return undefined
@@ -79,7 +78,7 @@ const styleOf = (vnode: VNode): Bag | undefined => {
   )
 }
 
-const isShallowEqual = (a: Bag | undefined, b: Bag | undefined): boolean => {
+const isShallowEqual = (a: Values | undefined, b: Values | undefined): boolean => {
   if (a === undefined || b === undefined) {
     return a === b
   }
@@ -92,7 +91,7 @@ const isShallowEqual = (a: Bag | undefined, b: Bag | undefined): boolean => {
 /** style → `engine.setProp(node, 'style', …)`. Values are RN style values. */
 export const makeStyleModule = (engine: Engine): Module => {
   const updateStyle = (oldVnode: VNode, vnode: VNode): void => {
-    const node = elmOf(vnode)
+    const node = engineNodeOf(vnode)
     const style = styleOf(vnode)
     if (node !== undefined && !isShallowEqual(styleOf(oldVnode), style)) {
       engine.setProp(node, 'style', style ?? null)
@@ -113,6 +112,8 @@ export const topLevelTypeOf = (name: string): string =>
 
 type Listener = (this: VNode, event: unknown, vnode: VNode) => void
 
+type On = NonNullable<NonNullable<VNode['data']>['on']>
+
 const invokeHandler = (
   handler: Listener | ReadonlyArray<Listener> | undefined,
   vnode: VNode,
@@ -125,8 +126,8 @@ const invokeHandler = (
   }
 }
 
-type Subscription = {
-  /** The vnode currently patched onto the node; its `on` is read per event. */
+type Subscription = NodeState<On> & {
+  /** The vnode currently patched onto the node; its handler is read per event. */
   vnode: VNode
   disposers: Map<string, () => void>
 }
@@ -138,65 +139,53 @@ type Subscription = {
  * Listeners receive the Engine's `NativeSyntheticEvent` (`{ nativeEvent,
  * target, stopPropagation }`); there is no `event.type`.
  */
-export const makeEventsModule = (engine: Engine): Module => {
-  const subscriptions = new WeakMap<EngineNode, Subscription>()
-
-  const updateListeners = (_oldVnode: VNode, vnode: VNode): void => {
-    const node = elmOf(vnode)
-    if (node === undefined) {
-      return
-    }
-    const on = vnode.data?.on ?? {}
-    const existing = subscriptions.get(node)
-    if (existing === undefined && Object.keys(on).length === 0) {
-      return
-    }
-    const subscription: Subscription = existing ?? {
-      vnode,
-      disposers: new Map(),
-    }
-    subscription.vnode = vnode
-    subscriptions.set(node, subscription)
-
-    for (const [name, dispose] of subscription.disposers) {
-      if (!(name in on)) {
-        dispose()
-        subscription.disposers.delete(name)
-      }
-    }
-    for (const name of Object.keys(on)) {
-      if (!subscription.disposers.has(name)) {
-        subscription.disposers.set(
-          name,
-          engine.setEventListener(node, topLevelTypeOf(name), event => {
-            const current = subscription.vnode
-            invokeHandler(current.data?.on?.[name], current, event)
-          }),
-        )
-      }
-    }
-  }
-
-  return {
-    create: updateListeners,
-    update: updateListeners,
-    destroy: vnode => {
-      const node = elmOf(vnode)
-      if (node === undefined) {
-        return
-      }
-      subscriptions.get(node)?.disposers.forEach(dispose => dispose())
-      subscriptions.delete(node)
+export const makeEventsModule = (engine: Engine): Module =>
+  makeNodeStateHooks<On, Subscription>({
+    inputOf: vnode => {
+      const on = vnode.data?.on
+      return on === undefined || Object.keys(on).length === 0 ? undefined : on
     },
-  }
-}
+    start: (_node, on, vnode) => {
+      const subscription: Subscription = {
+        input: on,
+        vnode,
+        disposers: new Map(),
+        dispose: () => {
+          subscription.disposers.forEach(dispose => dispose())
+          subscription.disposers.clear()
+        },
+      }
+      return subscription
+    },
+    onPatch: (node, subscription, _previousOn, vnode) => {
+      subscription.vnode = vnode
+      const on = subscription.input
+      for (const [name, dispose] of subscription.disposers) {
+        if (!(name in on)) {
+          dispose()
+          subscription.disposers.delete(name)
+        }
+      }
+      for (const name of Object.keys(on)) {
+        if (!subscription.disposers.has(name)) {
+          subscription.disposers.set(
+            name,
+            engine.setEventListener(node, topLevelTypeOf(name), event => {
+              const current = subscription.vnode
+              invokeHandler(current.data?.on?.[name], current, event)
+            }),
+          )
+        }
+      }
+    },
+  })
 
 /** Frees what the Engine holds for a destroyed element: listeners,
  *  animations, focus. It does not detach the node; snabbdom removes it after
  *  every destroy hook has run. */
 export const makeDestroyModule = (engine: Engine): Module => ({
   destroy: vnode => {
-    const node = elmOf(vnode)
+    const node = engineNodeOf(vnode)
     if (node !== undefined) {
       engine.destroyNode(node)
     }

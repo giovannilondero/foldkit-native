@@ -1,12 +1,14 @@
 import type { Engine, EngineNode, ResponderEvent } from '@ng-native/fabric'
-import type { Module, VNode } from 'foldkit/runtime'
+import type { Module } from 'foldkit/runtime'
 
-import { asEngineNode } from './domApi.ts'
+import { makeNodeStateHooks, type NodeState } from './nodeState.ts'
 
 /**
- * What `n.pressable` puts on its vnode under `data.press`. The press module
- * reads the current vnode's value on every gesture, so a render that hands in
- * a fresh `onPress` closure does not re-register the responder.
+ * What `n.pressable` puts on its vnode under `data.press` when it has an
+ * `OnPress`. The press module reads the current vnode's value on every
+ * gesture, so a render that hands in a fresh `onPress` closure does not
+ * re-register the responder. A pressable without `OnPress` has no `press`
+ * and never becomes the responder.
  */
 export type PressData = Readonly<{
   onPress: () => void
@@ -44,12 +46,55 @@ const isStillOnControl = (size: Size | undefined, dx: number, dy: number): boole
   return Math.abs(dx) <= size.width + horizontal && Math.abs(dy) <= size.height + vertical
 }
 
-type Machine = {
-  press: PressData
-  dispose: () => void
-}
+/** One node's registration with the responder system. */
+type PressResponder = NodeState<PressData>
 
-const pressOf = (vnode: VNode): PressData | undefined => vnode.data?.press
+const startPressResponder = (engine: Engine, node: EngineNode, press: PressData): PressResponder => {
+  let origin: Point | undefined
+  let size: Size | undefined
+  let isCancelled = false
+
+  const responder: PressResponder = { input: press, dispose: () => {} }
+  const stopResponding = engine.setResponder(node, {
+    onStartShouldSetResponder: () => !responder.input.isDisabled,
+    onResponderGrant: event => {
+      origin = touchPoint(event)
+      isCancelled = false
+    },
+    onResponderMove: event => {
+      if (isCancelled || origin === undefined) {
+        return
+      }
+      const point = touchPoint(event)
+      // A drag, not a tap: give up the press but stay the responder.
+      isCancelled = !isStillOnControl(size, point.x - origin.x, point.y - origin.y)
+    },
+    onResponderRelease: () => {
+      const wasCancelled = isCancelled
+      origin = undefined
+      isCancelled = false
+      if (!wasCancelled && !responder.input.isDisabled) {
+        responder.input.onPress()
+      }
+    },
+    onResponderTerminate: () => {
+      origin = undefined
+      isCancelled = true
+    },
+    onResponderTerminationRequest: () => true,
+  })
+  const stopLayout = engine.setEventListener(node, 'topLayout', event => {
+    const layout = (event as { nativeEvent?: { layout?: Size } }).nativeEvent?.layout
+    if (layout !== undefined) {
+      size = { width: layout.width, height: layout.height }
+    }
+  })
+  responder.dispose = () => {
+    stopResponding()
+    stopLayout()
+  }
+  return responder
+}
 
 /**
  * `data.press` → the Engine's responder system: RN's Pressability reduced to
@@ -61,97 +106,22 @@ const pressOf = (vnode: VNode): PressData | undefined => vnode.data?.press
  * (TalkBack / D-pad) are not implemented.
  */
 export const makePressModule = (engine: Engine): Module => {
-  const machines = new WeakMap<EngineNode, Machine>()
-
-  const start = (node: EngineNode, press: PressData): Machine => {
-    let origin: Point | undefined
-    let size: Size | undefined
-    let isCancelled = false
-
-    const machine: Machine = { press, dispose: () => {} }
-    const stopResponding = engine.setResponder(node, {
-      onStartShouldSetResponder: () => !machine.press.isDisabled,
-      onResponderGrant: event => {
-        origin = touchPoint(event)
-        isCancelled = false
-      },
-      onResponderMove: event => {
-        if (isCancelled || origin === undefined) {
-          return
-        }
-        const point = touchPoint(event)
-        // A drag, not a tap: give up the press but stay the responder.
-        isCancelled = !isStillOnControl(size, point.x - origin.x, point.y - origin.y)
-      },
-      onResponderRelease: () => {
-        const wasCancelled = isCancelled
-        origin = undefined
-        isCancelled = false
-        if (!wasCancelled && !machine.press.isDisabled) {
-          machine.press.onPress()
-        }
-      },
-      onResponderTerminate: () => {
-        origin = undefined
-        isCancelled = true
-      },
-      onResponderTerminationRequest: () => true,
-    })
-    const stopLayout = engine.setEventListener(node, 'topLayout', event => {
-      const layout = (event as { nativeEvent?: { layout?: Size } }).nativeEvent?.layout
-      if (layout !== undefined) {
-        size = { width: layout.width, height: layout.height }
-      }
-    })
-    machine.dispose = () => {
-      stopResponding()
-      stopLayout()
-    }
-    return machine
-  }
-
   // NOTE: disposal waits for the end of the patch. Tearing down the responder
   // a finger is still on makes the Engine clear `:active` and commit at once,
   // and a commit in the middle of a patch builds a half-patched tree: native
   // then sees a view appended to a second parent and aborts.
-  const disposeAfterPatch: Array<Machine> = []
-
-  const stop = (node: EngineNode): void => {
-    const machine = machines.get(node)
-    if (machine !== undefined) {
-      disposeAfterPatch.push(machine)
-      machines.delete(node)
-    }
-  }
-
-  const updatePress = (_oldVnode: VNode, vnode: VNode): void => {
-    if (vnode.elm === undefined) {
-      return
-    }
-    const node = asEngineNode(vnode.elm)
-    const press = pressOf(vnode)
-    const machine = machines.get(node)
-    if (press === undefined) {
-      if (machine !== undefined) {
-        stop(node)
-      }
-    } else if (machine === undefined) {
-      machines.set(node, start(node, press))
-    } else {
-      machine.press = press
-    }
-  }
+  const disposeAfterPatch: Array<PressResponder> = []
 
   return {
-    create: updatePress,
-    update: updatePress,
-    destroy: vnode => {
-      if (vnode.elm !== undefined) {
-        stop(asEngineNode(vnode.elm))
-      }
-    },
+    ...makeNodeStateHooks<PressData, PressResponder>({
+      inputOf: vnode => vnode.data?.press,
+      start: (node, press) => startPressResponder(engine, node, press),
+      release: responder => {
+        disposeAfterPatch.push(responder)
+      },
+    }),
     post: () => {
-      disposeAfterPatch.splice(0).forEach(machine => machine.dispose())
+      disposeAfterPatch.splice(0).forEach(responder => responder.dispose())
     },
   }
 }
