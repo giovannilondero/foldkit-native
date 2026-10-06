@@ -4,7 +4,6 @@ export { mount, type MountedApp, type NativeHost, type NativeProgram } from './m
 export { attachStyles, type AttachStylesOptions, type StyleConditions } from './css/index.ts'
 export { currentConditions, watchConditions } from './css/conditions.ts'
 export { registerApp, type RegisterAppOptions } from './register.ts'
-export { mountSplash } from './splash.ts'
 export {
   n,
   nativeView,
