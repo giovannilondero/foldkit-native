@@ -110,9 +110,18 @@ export const makePressModule = (engine: Engine): Module => {
     return machine
   }
 
+  // NOTE: disposal waits for the end of the patch. Tearing down the responder
+  // a finger is still on makes the Engine clear `:active` and commit at once,
+  // and a commit in the middle of a patch builds a half-patched tree: native
+  // then sees a view appended to a second parent and aborts.
+  const disposeAfterPatch: Array<Machine> = []
+
   const stop = (node: EngineNode): void => {
-    machines.get(node)?.dispose()
-    machines.delete(node)
+    const machine = machines.get(node)
+    if (machine !== undefined) {
+      disposeAfterPatch.push(machine)
+      machines.delete(node)
+    }
   }
 
   const updatePress = (_oldVnode: VNode, vnode: VNode): void => {
@@ -140,6 +149,9 @@ export const makePressModule = (engine: Engine): Module => {
       if (vnode.elm !== undefined) {
         stop(asEngineNode(vnode.elm))
       }
+    },
+    post: () => {
+      disposeAfterPatch.splice(0).forEach(machine => machine.dispose())
     },
   }
 }

@@ -93,6 +93,16 @@ const setup = () => {
     fabric.emit(node, 'topTouchEnd', { ...point, touches: [], changedTouches: [point] })
   }
 
+  /** A finger that lands on `testID` and stays down. */
+  const touchDown = (testID: string): void => {
+    const node = byTestID(testID)
+    if (node === undefined) {
+      throw new Error(`Nothing committed with testID ${testID}`)
+    }
+    const point = { identifier: 1, target: node.reactTag, pageX: 5, pageY: 5, timestamp: 0 }
+    fabric.emit(node, 'topTouchStart', { ...point, touches: [point], changedTouches: [point] })
+  }
+
   const has = (text: string) => () => fabric.render().includes(text)
 
   const openHttp = async () => {
@@ -101,7 +111,7 @@ const setup = () => {
     await settle(() => byTestID('http.status') !== undefined)
   }
 
-  return { app, fakeFetch, settle, byTestID, tap, has, openHttp }
+  return { app, fakeFetch, settle, byTestID, tap, touchDown, has, openHttp }
 }
 
 describe('HTTP demo', () => {
@@ -117,6 +127,24 @@ describe('HTTP demo', () => {
     request.resolve(todoResponse('delectus aut autem'))
     await settle(has('delectus aut autem'))
     expect(has('Loading')()).toBe(false)
+    app.dispose()
+  })
+
+  it('leaving while a finger holds a button on the screen keeps commits valid', async () => {
+    const { app, fakeFetch, settle, tap, has, byTestID, openHttp, touchDown } = setup()
+    await openHttp()
+    await vi.waitFor(() => expect(fakeFetch.pending).toHaveLength(1))
+    fakeFetch.next().resolve(todoResponse('ok'))
+    await settle(has('RawText "ok"'))
+
+    // Back is released, and before the frame that leaves the screen a finger
+    // lands on Reload: that frame destroys the button it is holding.
+    tap('back')
+    touchDown('http.reload')
+    await settle(() => byTestID('menu.Http') !== undefined)
+
+    await openHttp()
+    await settle(has('Loading'))
     app.dispose()
   })
 
