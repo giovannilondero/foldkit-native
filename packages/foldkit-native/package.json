@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./view": "./src/view/index.ts",
     "./mount": "./src/mount.ts",
+    "./subscription": "./src/subscription/index.ts",
     "./testing": "./test/testing.ts"
   },
   "scripts": {
