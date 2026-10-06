@@ -1,5 +1,6 @@
-import { Option, Schema } from 'effect'
+import { type Layer, Option, Schema } from 'effect'
 import { mapMessages } from 'foldkit/command'
+import { layer as httpLayer } from 'foldkit/http'
 import { defineMessageUnion } from 'foldkit/message'
 import { makeElement } from 'foldkit/runtime'
 import { lift, type Subscriptions } from 'foldkit/subscription'
@@ -133,14 +134,19 @@ const view = (model: Model, n: NativeBuilder<Message>): Html =>
     ],
   )
 
-/** The Spike app, for `registerApp` (and `mount` in tests). */
-export const makeSpike = ({ container, platform }: NativeHost) =>
+/** The Spike app, for `registerApp` (and `mount` in tests). `resources`
+ *  provides the demos' services; tests pass stubs. */
+export const makeSpike = (
+  { container, platform }: NativeHost,
+  resources: Layer.Layer<DemoServices> = httpLayer,
+) =>
   makeElement({
     Model,
     init: () => ({ model: { screen: Screen.Menu() } }),
     update,
     view: nativeView(view),
     subscriptions,
+    resources,
     container,
     platform,
   })
