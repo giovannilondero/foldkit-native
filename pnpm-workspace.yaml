@@ -2,3 +2,5 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'vendor/foldkit/packages/foldkit'
+allowBuilds:
+  '@parcel/watcher': false

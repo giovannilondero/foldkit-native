@@ -1,33 +1,25 @@
 import {
-  type Conditions,
   Engine,
+  type StyleSheet as CssStyleSheet,
   getFabricUIManager,
   registerPlatformComponents,
 } from '@ng-native/fabric'
-import {
-  AppRegistry,
-  Appearance,
-  Dimensions,
-  Image,
-  PixelRatio,
-  Platform,
-  StyleSheet,
-  processColor,
-} from 'react-native'
+import { AppRegistry, Image, Platform, StyleSheet, processColor } from 'react-native'
 
+import { currentConditions, watchConditions } from './css/conditions.ts'
+import { attachStyles } from './css/index.ts'
 import { type MountedApp, type NativeHost, type NativeProgram, mount } from './mount.ts'
 
-// NOTE: re-derived from `Dimensions`, `Appearance` and `PixelRatio`, because
-// `@ng-native/device` (which has these) imports `@angular/core`.
-const currentConditions = (): Conditions => {
-  const { width, height } = Dimensions.get('window')
-  return {
-    width,
-    height,
-    colorScheme: Appearance.getColorScheme() === 'dark' ? 'dark' : 'light',
-    fontScale: PixelRatio.getFontScale(),
-  }
-}
+export type RegisterAppOptions = Readonly<{
+  /** The React Native app key. Defaults to `main`, Expo's. */
+  appKey?: string
+  /**
+   * A global stylesheet for `Class`: the module `withTailwind` writes. Every
+   * element is matched against it, and the root follows the platform and the
+   * device's conditions (`ios:`, `dark:`, media queries).
+   */
+  styleSheet?: CssStyleSheet
+}>
 
 /**
  * Registers a Foldkit program as the React Native app `appKey`, rendered
@@ -43,7 +35,7 @@ const currentConditions = (): Conditions => {
  */
 export const registerApp = <Resources = never>(
   makeProgram: (host: NativeHost) => NativeProgram<Resources>,
-  appKey = 'main',
+  { appKey = 'main', styleSheet }: RegisterAppOptions = {},
 ): void => {
   registerPlatformComponents(Platform.OS)
 
@@ -67,13 +59,29 @@ export const registerApp = <Resources = never>(
   AppRegistry.registerRunnable(appKey, ({ rootTag }: { rootTag: number | string }) => {
     dispose()
     const surfaceId = Number(rootTag)
+    const conditions = currentConditions()
     const engine = new Engine(getFabricUIManager(), surfaceId, {
       processColor: value => processColor(value),
       resolveAssetSource: value =>
         Image.resolveAssetSource(value as Parameters<typeof Image.resolveAssetSource>[0]),
-      conditions: currentConditions(),
+      conditions,
       tokens: { '--hairline': { length: StyleSheet.hairlineWidth } },
+      globalStyles: styleSheet ?? null,
     })
-    current = { surfaceId, app: mount(engine, makeProgram) }
+    const unwatch =
+      styleSheet === undefined
+        ? () => {}
+        : watchConditions(attachStyles(engine, { platform: Platform.OS, conditions }))
+    const app = mount(engine, makeProgram)
+    current = {
+      surfaceId,
+      app: {
+        engine,
+        dispose: () => {
+          unwatch()
+          app.dispose()
+        },
+      },
+    }
   })
 }
