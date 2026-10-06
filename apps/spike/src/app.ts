@@ -15,13 +15,22 @@ import { type DemoTag, Screen, demos } from './demos'
 // navigation. It routes each demo generically through the `demos` registry,
 // so adding a demo never touches this file.
 
-export const Model = Schema.Struct({ screen: Screen })
+export const Model = Schema.Struct({
+  screen: Screen,
+  /** Counts demo opens. A demo's Commands carry the visit that ran them, so a
+   *  result arriving after back and reopen is told apart from the new one's. */
+  visit: Schema.Number,
+})
 export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedDemo: { demo: Schema.String },
   ClickedBack: {},
-  /** A Message from the demo `demo`. Dropped unless that demo is open. */
+  /** A Command result from the demo `demo`, opened as visit `visit`. Dropped
+   *  unless that visit is still the open one. */
+  GotDemoCommandMessage: { demo: Schema.String, visit: Schema.Number, message: Schema.Unknown },
+  /** A Message from the demo `demo`'s view or Subscriptions. Both stop when
+   *  the demo closes, so the demo's tag being open is enough. */
   GotDemoMessage: { demo: Schema.String, message: Schema.Unknown },
 })
 export type Message = typeof Message.Type
@@ -37,31 +46,43 @@ const isDemoTag = (tag: string): tag is DemoTag => Object.hasOwn(demos, tag)
 const demoOf = (tag: string): AnyDemo | undefined =>
   isDemoTag(tag) ? (demos[tag] as unknown as AnyDemo) : undefined
 
+/** Wraps a demo's Messages from its view and Subscriptions. */
 const toDemoMessage =
   (demo: string) =>
   (message: unknown): Message =>
     Message.GotDemoMessage({ demo, message })
 
-const showDemo = (tag: string, result: Return<unknown, unknown, DemoServices>): UpdateReturn => ({
-  model: { screen: { _tag: tag, model: result.model } as Screen },
-  commands: mapMessages(result.commands, toDemoMessage(tag)),
+const showDemo = (
+  tag: string,
+  visit: number,
+  result: Return<unknown, unknown, DemoServices>,
+): UpdateReturn => ({
+  model: { screen: { _tag: tag, model: result.model } as Screen, visit },
+  commands: mapMessages(result.commands, message =>
+    Message.GotDemoCommandMessage({ demo: tag, visit, message }),
+  ),
 })
+
+const updateOpenDemo = (model: Model, demo: string, demoMessage: unknown): UpdateReturn => {
+  const { screen } = model
+  const open = demoOf(demo)
+  if (screen._tag !== demo || screen._tag === 'Menu' || open === undefined) {
+    return { model }
+  }
+  return showDemo(demo, model.visit, open.update(screen.model, demoMessage))
+}
 
 const update = (model: Model, message: Message): UpdateReturn =>
   Message.match(message, {
     ClickedDemo: ({ demo }) => {
       const opened = demoOf(demo)
-      return opened === undefined ? { model } : showDemo(demo, opened.init())
+      return opened === undefined ? { model } : showDemo(demo, model.visit + 1, opened.init())
     },
-    ClickedBack: () => ({ model: { screen: Screen.Menu() } }),
-    GotDemoMessage: ({ demo, message: demoMessage }) => {
-      const { screen } = model
-      const open = demoOf(demo)
-      if (screen._tag !== demo || screen._tag === 'Menu' || open === undefined) {
-        return { model }
-      }
-      return showDemo(demo, open.update(screen.model, demoMessage))
-    },
+    ClickedBack: () => ({ model: { ...model, screen: Screen.Menu() } }),
+    GotDemoCommandMessage: ({ demo, visit, message: demoMessage }) =>
+      visit === model.visit ? updateOpenDemo(model, demo, demoMessage) : { model },
+    GotDemoMessage: ({ demo, message: demoMessage }) =>
+      updateOpenDemo(model, demo, demoMessage),
   })
 
 const openModel = (model: Model, tag: string): Option.Option<unknown> =>
@@ -142,7 +163,7 @@ export const makeSpike = (
 ) =>
   makeElement({
     Model,
-    init: () => ({ model: { screen: Screen.Menu() } }),
+    init: () => ({ model: { screen: Screen.Menu(), visit: 0 } }),
     update,
     view: nativeView(view),
     subscriptions,

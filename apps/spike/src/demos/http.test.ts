@@ -148,6 +148,29 @@ describe('HTTP demo', () => {
     app.dispose()
   })
 
+  it('a result from an earlier visit never lands in the reopened demo', async () => {
+    const { app, fakeFetch, settle, tap, has, byTestID, openHttp } = setup()
+    await openHttp()
+    await vi.waitFor(() => expect(fakeFetch.pending).toHaveLength(1))
+    const firstVisit = fakeFetch.next()
+
+    tap('back')
+    await settle(() => byTestID('menu.Http') !== undefined)
+    await openHttp()
+    await vi.waitFor(() => expect(fakeFetch.pending).toHaveLength(1))
+    const secondVisit = fakeFetch.next()
+
+    firstVisit.resolve(todoResponse('from the first visit'))
+    // Let the first visit's result travel through the runtime and render.
+    await new Promise(resolve => setTimeout(resolve, 50))
+    await settle(has('Loading'))
+    expect(has('from the first visit')()).toBe(false)
+
+    secondVisit.resolve(todoResponse('from the second visit'))
+    await settle(has('RawText "from the second visit"'))
+    app.dispose()
+  })
+
   it('a forced network error shows loading, then the error', async () => {
     const { app, fakeFetch, settle, tap, has, openHttp } = setup()
     await openHttp()
