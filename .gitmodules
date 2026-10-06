@@ -1,0 +1,4 @@
+[submodule "vendor/foldkit"]
+	path = vendor/foldkit
+	url = git@github.com:giovannilondero/foldkit.git
+	branch = platform-seam
