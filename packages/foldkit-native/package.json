@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./view": "./src/view/index.ts",
+    "./mount": "./src/mount.ts",
+    "./testing": "./test/testing.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

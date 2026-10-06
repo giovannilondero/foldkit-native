@@ -14,7 +14,12 @@ export type NativeHost = Readonly<{
 /** A program built by `makeElement` (or `makeApplication`) with no Flags.
  *  Ports and Resources are left open: `mount` only embeds the program. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type NativeProgram = MakeRuntimeReturn<any, void, any, 'Application' | 'Element'>
+export type NativeProgram<Resources = never> = MakeRuntimeReturn<
+  any,
+  void,
+  Resources,
+  'Application' | 'Element'
+>
 
 export type MountedApp = Readonly<{
   engine: Engine
@@ -33,9 +38,9 @@ const CONTAINER_ID = 'foldkit-native'
  * swaps for the app's root element and puts back on dispose. An anchor is
  * never committed, so the host's style survives the swap.
  */
-export const mount = (
+export const mount = <Resources = never>(
   engine: Engine,
-  makeProgram: (host: NativeHost) => NativeProgram,
+  makeProgram: (host: NativeHost) => NativeProgram<Resources>,
   options: FabricPlatformOptions = {},
 ): MountedApp => {
   const host = engine.createElement('view')

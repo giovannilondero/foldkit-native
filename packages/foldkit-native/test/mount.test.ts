@@ -5,7 +5,7 @@ import { makeElement, requireDispatch, type VNode } from 'foldkit/runtime'
 import { describe, expect, it, vi } from 'vitest'
 
 import { mount } from '../src/mount.ts'
-import { createFakeFabric } from './fakeFabric.ts'
+import { createFakeFabric, manualFrames } from './testing.ts'
 
 // NOTE: React Native's setUpGlobals aliases `window` and `self` to the global
 // object, and Foldkit's runtime reads `window.self` at boot. Node has neither.
@@ -43,19 +43,6 @@ const view = (model: Model): VNode => {
     h('text', {}, [`count:${model.count}`]),
     ...(model.count === 0 ? [h('view', { style: { backgroundColor: 'red' } }, [])] : []),
   ])
-}
-
-/** A `requestAnimationFrame` the test advances by hand. */
-const manualFrames = () => {
-  const pending: Array<() => void> = []
-  return {
-    requestAnimationFrame: (callback: () => void) => {
-      pending.push(callback)
-    },
-    flush: () => {
-      pending.splice(0).forEach(callback => callback())
-    },
-  }
 }
 
 const setup = () => {

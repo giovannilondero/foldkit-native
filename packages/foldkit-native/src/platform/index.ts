@@ -9,6 +9,7 @@ import {
   makePropsModule,
   makeStyleModule,
 } from './modules.ts'
+import { makePressModule } from './press.ts'
 
 export type FabricPlatformOptions = Readonly<{
   /** Defaults to the global `requestAnimationFrame`. Tests pass their own. */
@@ -54,6 +55,7 @@ export const makeFabricPlatform = (
       makeClassModule(engine),
       makeStyleModule(engine),
       makeEventsModule(engine),
+      makePressModule(engine),
       onUnmountModule,
       makeDestroyModule(engine),
     ],

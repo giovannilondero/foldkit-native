@@ -40,8 +40,8 @@ const currentConditions = (): Conditions => {
  * Refresh edit outside React components is a full reload, which ends the JS
  * runtime itself.
  */
-export const registerApp = (
-  makeProgram: (host: NativeHost) => NativeProgram,
+export const registerApp = <Resources = never>(
+  makeProgram: (host: NativeHost) => NativeProgram<Resources>,
   appKey = 'main',
 ): void => {
   registerPlatformComponents(Platform.OS)
