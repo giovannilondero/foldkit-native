@@ -158,6 +158,9 @@ importers:
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.3(@types/node@26.6.4)(@vitest/coverage-v8@5.0.3)(happy-dom@20.14.5)(vite@8.3.2(@types/node@26.6.4)(terser@5.51.2)(yaml@2.9.1))
 
   packages/foldkit-native:
     dependencies:

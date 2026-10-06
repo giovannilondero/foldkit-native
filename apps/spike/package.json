@@ -8,7 +8,8 @@
     "prebuild": "expo prebuild --clean",
     "ios": "expo run:ios",
     "android": "expo run:android",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0"
   }
 }

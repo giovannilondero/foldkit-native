@@ -3,8 +3,9 @@
 import 'expo'
 
 import { Engine, getFabricUIManager, registerPlatformComponents } from '@ng-native/fabric'
-import { mountSplash } from 'foldkit-native'
 import { AppRegistry, Platform, processColor } from 'react-native'
+
+import { showHermesProbe } from './probe/showHermesProbe'
 
 registerPlatformComponents(Platform.OS)
 
@@ -12,5 +13,6 @@ registerPlatformComponents(Platform.OS)
 // in the render path.
 AppRegistry.registerRunnable('main', ({ rootTag }: { rootTag: number | string }) => {
   const engine = new Engine(getFabricUIManager(), Number(rootTag), { processColor })
-  mountSplash(engine, 'Foldkit Native spike')
+  // S3: the disposable Hermes probe screen. The Foldkit mount (#14) replaces it.
+  showHermesProbe(engine)
 })

@@ -5,7 +5,7 @@
   "scripts": {
     "build:foldkit": "pnpm -F foldkit build",
     "build": "pnpm build:foldkit && pnpm -F foldkit-native build",
-    "test": "pnpm -F foldkit-native test"
+    "test": "pnpm -F foldkit-native -F spike test"
   },
   "devDependencies": {
     "vite": "^8.3.1"
