@@ -53,15 +53,17 @@ Following [What contract does @ng-native/fabric offer a non-Angular renderer?](h
   - attrs/props → `setProp`;
   - class → `setClasses`;
   - style → `setProp('style', …)`;
-  - events → `setEventListener`, which translates Fabric names (`topPress`, `topChangeText`) into the events `NativeAttribute` handlers expect;
+  - events → `setEventListener`, which maps an `on` key to its Fabric top-level name (`layout` → `topLayout`); there is no `topPress` or `topChangeText` (see the two modules below);
+  - press → the Engine's responder system (`n.pressable`);
+  - text input → `topChange { text, eventCount }` and the `setTextAndSelection` command (`n.textInput`);
   - Foldkit's `onUnmountModule`, plus a `destroy` hook calling `engine.destroyNode`.
-- **Press protocol:** `n.pressable` reimplements the press protocol that ng-native keeps in an Angular directive.
+- **Press protocol:** `n.pressable` reimplements the press protocol that ng-native keeps in an Angular directive. A press is not a Fabric event: it is RN's Pressability reduced to responder grant / move / release / terminate (`packages/foldkit-native/src/platform/press.ts`).
 - **Frame:** `requestFrame = cb => requestAnimationFrame(() => { cb(); engine.commit() })`. The Engine's `onDirty` covers renders outside a frame: init, the crash view, teardown ([How are Browser Effects handled natively?](https://github.com/giovannilondero/foldkit-native/issues/7)).
 - **Mount:**
   - `AppRegistry.registerRunnable('main', …)` creates `new Engine(getFabricUIManager(), rootTag, { processColor, resolveAssetSource, conditions, tokens })`. `conditions` comes from `Dimensions`, `Appearance` and `PixelRatio`; `tokens` from `StyleSheet`.
-  - It adds a host `view` with an `id`, styled `height: '100%'` and parented under `engine.root`.
-  - It then boots `makeElement({ …, container: host, platform: fabricPlatform })` + `Runtime.embed`.
-  - `dispose` runs when the host unmounts, which also covers Fast Refresh.
+  - It adds a host `view`, styled `height: '100%'` and parented under `engine.root`. The `id` Foldkit looks up sits on an Engine anchor inside the host, not on the host: Foldkit swaps its container for the app's root, and an anchor is never committed, so the host's style survives the swap (`packages/foldkit-native/src/mount.ts`).
+  - It then boots `makeElement({ …, container: anchor, platform: fabricPlatform })` + `Runtime.embed`.
+  - `dispose` runs when native stops the surface (`RN$stopSurface`, which `registerApp` installs since no React does) or the runnable starts again. Fast Refresh, checked on both platforms: with no React components there is no refresh boundary, so an edit is a full reload that replaces the JS runtime and the app restarts from `init`. Should an entry file ever be evaluated again in the same runtime, `registerApp` disposes the running app and mounts the new program on its surface (`packages/foldkit-native/src/register.ts`, `test/register.test.ts`).
 - **Dev warnings:** expect noisy Engine dev warnings unless `claimHost` / `declareNativeProps` are called. Silence them only if they get in the way.
 
 ## View API
@@ -85,7 +87,7 @@ Following [How are Browser Effects handled natively?](https://github.com/giovann
 
 ## The Spike app
 
-`apps/spike` is one Foldkit app. Its Model holds the active demo as a `Data.TaggedEnum`, together with a menu screen and a "back" pressable, all drawn with `n`. There is no native navigation. Switching demos also exercises unmounting a subtree.
+`apps/spike` is one Foldkit app. Its Model holds the active demo as a tagged union (Foldkit's `defineTaggedUnion`, a Schema, rather than `Data.TaggedEnum`, so the Model stays a Schema like any Foldkit Model), together with a menu screen and a "back" pressable, all drawn with `n`. There is no native navigation. Switching demos also exercises unmounting a subtree.
 
 ## Steps and success criteria
 
@@ -101,7 +103,7 @@ Every rung is verified by hand on an **iOS simulator and an Android emulator**. 
 | 3 | **Long list** | 1,000 keyed rows in an `n.scrollView`. Prepend and remove keep identity, and scrolling is usable. Virtualization gets added only if the plain scroll view doesn't hold up, and that design is decided during the Spike |
 | 4 | **HTTP Command** | A GET of JSON shows loading, success and error states, including a forced network error. Check how RN's `fetch` handles response bodies with `FetchHttpClient` |
 | 5 | **Subscription** | A small `Stream` over `AppState` in `packages/foldkit-native` drives a count of foreground/background transitions, with no Foldkit change. `Stream.tick` is the fallback if it fights back |
-| 6 | **Styling via classes** | The counter is restyled through Tailwind classes, with `withTailwind(getDefaultConfig(...))` on the Expo Metro config and the ~300-line adapter from [Can ng-native's CSS/Tailwind pipeline serve Foldkit Native?](https://github.com/giovannilondero/foldkit-native/issues/4) |
+| 6 | **Styling via classes** | The counter is restyled through Tailwind classes, with `withTailwind(getDefaultConfig(...))` on the Expo Metro config and the adapter from [Can ng-native's CSS/Tailwind pipeline serve Foldkit Native?](https://github.com/giovannilondero/foldkit-native/issues/4). The research sized it at ~300 lines; it came out at ~85 (`packages/foldkit-native/src/css/`), because the Engine's `globalStyles` does the matching and `Style` is already RN-shaped |
 | — | *Stretch:* navigation | Not specified. See Deferred |
 
 Until rung 6, styling is inline `Style` only.
@@ -110,9 +112,27 @@ Until rung 6, styling is inline `Style` only.
 
 ## Decided during the Spike, not before
 
-- The controlled text input protocol (rung 2).
-- Long lists: plain scroll view vs. virtualization, how keyed VNodes interact with recycling, and builder-level vs. a Submodel window (rung 3).
-- What native does with a raw text node outside `n.text`. The builder makes this a compile error, but the Platform should still handle it safely.
+- The controlled text input protocol (rung 2). **Decided:** React Native's event-count protocol, driven from the Model: native edits first, every render writes `text` and `mostRecentEventCount`, and a Model that disagrees with native is pushed with `setTextAndSelection(eventCount, …)`, which native drops if the user typed since. See [`packages/foldkit-native/docs/text-input.md`](../packages/foldkit-native/docs/text-input.md).
+  - **Measured bound for "fast typing drops no characters":** no losses up to 50 keys/s on the iOS simulator and 1,000 keys/s on the Android emulator. At about 100 keys/s, iOS drops one character in about 1 run in 5; React Native's own `<TextInput>` scrambled every run at that rate. A Message deferred past Foldkit's drain budget can also briefly revert the field until its render lands. Both are recorded, not fixed.
+- Long lists: plain scroll view vs. virtualization, how keyed VNodes interact with recycling, and builder-level vs. a Submodel window (rung 3). **Decided:** a plain `n.scrollView` of keyed rows, no virtualization: 1,000 rows held up on both platforms. The triggers and open questions for a window are in [`packages/foldkit-native/docs/long-list.md`](../packages/foldkit-native/docs/long-list.md).
+- What native does with a raw text node outside `n.text`. The builder makes this a compile error, but the Platform should still handle it safely. **Decided:** the Fabric Platform keeps such a text node out of the Engine tree, puts a never-committed anchor in its place (so snabbdom's moves and removals still line up), and logs a warning naming the text. It is not drawn. See `makeLooseText` in [`packages/foldkit-native/src/platform/domApi.ts`](../packages/foldkit-native/src/platform/domApi.ts).
+- A demo's late Command result (rung 4). The app shell counts demo opens and tags each demo Command's result with its visit, so a response from an earlier visit is dropped after back and reopen ([`apps/spike/src/app.ts`](../apps/spike/src/app.ts)).
+- `@ng-native/metro` is a devDependency of `packages/foldkit-native` only, for its tests' `compileCss`. It is not the Metro preset, and the app's Metro config stays plain (`@ng-native/tailwind` brings its own copy).
+
+### Accepted deviations
+
+Places where the build differs from the plan above, accepted at review. The sections above now describe what was built.
+
+- Fabric events: there is no `topPress` / `topChangeText`. Presses use the responder system, and the text input uses `topChange` with RN's event count.
+- The app's Model uses `defineTaggedUnion` (a Schema) in place of `Data.TaggedEnum`.
+- The container `id` is on an anchor inside the host view, not on the host.
+- The Tailwind adapter is ~85 lines, not ~300.
+
+### Known limitations
+
+- **Tailwind dev loop race (rung 6).** Editing a class makes Metro see the `.ts` change first and the regenerated sheet a few hundred ms later. With no Fast Refresh boundary, each change is a full reload, and a device sometimes picks up only the first: the new class has no rule yet, and the element renders unstyled until a manual reload. Fixing it needs `withTailwind` or the Metro config to regenerate the sheet before Metro sees the source change, or to debounce. Not built.
+- **No safe-area insets.** The shell pads the top with a fixed inset, and nothing pads the bottom: the last row of a long list sits under Android's gesture bar. `pt-safe`-style tokens read `--safe-area-inset-*`, which nothing sets. Not built.
+- **`active:` stays on while the finger drags off a pressable**, until release. React Native un-highlights on leaving the press rectangle. The press itself is correctly cancelled. Not built.
 
 ## Deferred
 

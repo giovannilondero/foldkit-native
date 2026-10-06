@@ -23,6 +23,10 @@ The Platform runs the after-commit work (`afterCommit` in `src/platform/index.ts
 ## Known limits
 
 - **iOS keyboard features fight rewrites.** If the Model rewrites the text while autocorrect, predictions or auto-capitalisation are on, UIKit's keyboard keeps its own idea of the document, and fast typing gets scrambled (letters lost or moved). Use `n.AutoCorrect(false)` (which sets both `autoCorrect` and `spellCheck`) and `n.AutoCapitalize('none')` on a field whose update transforms the text.
-- **Above about 100 keys/s on the iOS simulator**, an occasional character still drops when a rewrite lands during a keystroke. There were no losses at 50 keys/s. React Native's own `<TextInput>` with the same uppercase transform scrambled all 5 runs at 100 keys/s, and none at 50 keys/s.
+- **Fast typing has a measured bound on iOS.** Measured with a 50–63 character sentence typed by the simulator tooling into the uppercasing demo field (dev builds):
+  - iOS simulator: no losses at 50 keys/s (20 ms per key, 7 of 7 runs; a re-run with the host under heavy load dropped one character in 1 of 7 runs). At 100 keys/s (10 ms per key), about 1 run in 5 dropped one character, when a rewrite landed during a keystroke. React Native's own `<TextInput>` with the same uppercase transform scrambled all 5 runs at 100 keys/s and lost nothing at 50 keys/s, so this is at least as good as React Native.
+  - Android emulator: no losses at 50, 100 or 1,000 keys/s (20, 10 and 1 ms per key).
+
+  The Spike's "fast typing drops no characters" criterion therefore holds up to 50 keys/s on iOS, far above human typing; this is recorded rather than fixed.
 - **Messages deferred over the drain budget.** If Foldkit defers a Message past its drain budget, the step 6 check can run before that Message renders and briefly revert the field until the render lands.
 - **No `selection` prop, no focus/blur/submit events**, and no `topSelectionChange` tracking yet.
