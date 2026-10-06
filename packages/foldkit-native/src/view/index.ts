@@ -59,7 +59,7 @@ export type ScrollViewAttribute<Message> = Attribute<
   Message
 >
 export type TextInputAttribute<Message> = Attribute<
-  CommonTag | 'Value' | 'Placeholder' | 'OnChangeText',
+  CommonTag | 'Value' | 'Placeholder' | 'OnChangeText' | 'AutoCorrect' | 'AutoCapitalize',
   Message
 >
 
@@ -226,6 +226,16 @@ const makeElements = <Message>(toParent: (message: unknown) => unknown) => ({
     attribute('Value', data => {
       data.textInput = { onChangeText: data.textInput?.onChangeText, value }
     }),
+  /** Off for a field whose Model rewrites the text: iOS's autocorrect and
+   *  predictions fight a rewrite under them and scramble fast typing. */
+  AutoCorrect: (isOn: boolean): Attribute<'AutoCorrect'> =>
+    attribute('AutoCorrect', data => {
+      data.props['autoCorrect'] = isOn
+      data.props['spellCheck'] = isOn
+    }),
+  AutoCapitalize: (
+    value: 'none' | 'sentences' | 'words' | 'characters',
+  ): Attribute<'AutoCapitalize'> => prop('AutoCapitalize', 'autoCapitalize', value),
   Placeholder: (value: string): Attribute<'Placeholder'> =>
     prop('Placeholder', 'placeholder', value),
   OnChangeText: (toMessage: (text: string) => Message): Attribute<'OnChangeText', Message> =>

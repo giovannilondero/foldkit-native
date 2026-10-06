@@ -36,7 +36,7 @@ export type TextInputModuleOptions = Readonly<{
 }>
 
 /**
- * The controlled text input protocol: React Native's, driven from the
+ * The controlled text input protocol (`docs/text-input.md`): React Native's, driven from the
  * Model instead of component state.
  *
  * - Native edits first and reports `topChange { text, eventCount }`. The

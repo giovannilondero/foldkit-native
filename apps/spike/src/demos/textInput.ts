@@ -26,6 +26,10 @@ const view = (model: Model, n: NativeBuilder<Message>): Html =>
         n.AccessibilityLabel('Uppercase field'),
         n.Value(model.text),
         n.Placeholder('Type here'),
+        // NOTE: the uppercase comes from the Model, not the keyboard: keep
+        // the keyboard's own capitalisation and corrections out of it.
+        n.AutoCorrect(false),
+        n.AutoCapitalize('none'),
         n.OnChangeText(text => Message.ChangedText({ text })),
         n.Style({
           fontSize: 20,
